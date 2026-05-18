@@ -12,6 +12,7 @@ wheels/
 # Environment variables and API keys
 .env
 .env.*
+!.env.example
 *.env
 
 # Local secrets and credentials
