@@ -56,19 +56,38 @@ class VectorStore:
     - Location: ../data/vector_store
 ```
 
+#### 5. **RAGRetriever** (Custom Class)
+```python
+class RAGRetriever:
+    - Query embedding generation
+    - Vector similarity search from stored documents
+    - Configurable top-k results and similarity thresholds
+    - Returns ranked results with metadata and similarity scores
+```
+
+#### 6. **Groq LLM Integration**
+- `ChatGroq`: LLM for generating answers from retrieved context
+- Supports various models (llama-3.1-8b-instant, etc.)
+- Configurable temperature and max tokens
+- Environment variable-based API key management
+
 ## 📦 Dependencies
 
 The project uses the following key libraries:
 
-| Library | Purpose |
-|---------|---------|
-| `langchain` | Document loading and text splitting framework |
-| `langchain-community` | Extended loaders for PDFs and other formats |
-| `sentence-transformers` | Embedding generation using pretrained models |
-| `chromadb` | Vector database for persistent embedding storage |
-| `pypdf` | PDF parsing alternative |
-| `pymupdf` | Advanced PDF extraction |
-| `faiss-cpu` | Vector similarity search (optional) |
+| Library | Version | Purpose |
+|---------|---------|----------|
+| `langchain` | ≥1.3.0 | Document loading and text splitting framework |
+| `langchain-core` | ≥1.4.0 | Core abstractions for chains and agents |
+| `langchain-community` | ≥0.4.1 | Extended loaders for PDFs and other formats |
+| `langchain-groq` | ≥1.1.2 | Groq LLM integration |
+| `sentence-transformers` | ≥5.5.0 | Embedding generation using pretrained models |
+| `chromadb` | ≥1.5.9 | Vector database for persistent embedding storage |
+| `pypdf` | ≥6.11.0 | PDF parsing library |
+| `pymupdf` | ≥1.27.2.3 | Advanced PDF extraction |
+| `faiss-cpu` | ≥1.13.2 | Vector similarity search |
+| `python-dotenv` | ≥1.2.2 | Environment variable management for API keys |
+| `ipykernel` | ≥7.2.0 | Jupyter kernel for notebook support |
 
 **Python Version**: ≥ 3.14 (as specified in pyproject.toml)
 
@@ -80,9 +99,14 @@ d:\RAG-Ai\Try/
 ├── pyproject.toml                   # Project metadata and dependencies
 ├── requirements.txt                 # Python package requirements
 ├── README.md                        # This file
+├── .gitignore                       # Git ignore configuration
+├── .env.example                     # Template for environment variables (copy to .env)
+│
+├── src/                             # Source code package
+│   └── __init__.py                  # Package initialization
 │
 ├── notebook/                        # Jupyter notebooks for development
-│   ├── pdf-loader.ipynb            # PDF processing & embedding pipeline
+│   ├── pdf-loader.ipynb            # Complete RAG pipeline with retrieval & LLM
 │   └── document.ipynb               # Document loading demonstrations
 │
 └── data/                            # Data storage directory
@@ -167,6 +191,69 @@ vectorstore = VectorStore(
 vectorstore.add_documents(chunks, embeddings)
 ```
 
+### Step 5: Retrieve Relevant Documents
+```python
+from notebook.pdf-loader import RAGRetriever
+
+rag_retriever = RAGRetriever(vectorstore, embedding_manager)
+query = "What are different types of algorithms?"
+results = rag_retriever.retrieve(query, top_k=5)
+
+for result in results:
+    print(f"Relevance Score: {result['similarity_score']:.2f}")
+    print(f"Content: {result['content'][:200]}...\n")
+```
+
+### Step 6: Generate Answers with Groq LLM
+```python
+from langchain_groq import ChatGroq
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load API key from .env
+groq_api_key = os.getenv("GROQ_API_KEY")
+
+llm = ChatGroq(
+    groq_api_key=groq_api_key,
+    model_name="llama-3.1-8b-instant",
+    temperature=0.1,
+    max_tokens=1024
+)
+
+# Simple RAG: retrieve context and generate answer
+def rag_simple(query, retriever, llm, top_k=3):
+    results = retriever.retrieve(query, top_k=top_k)
+    context = "\n\n".join([doc['content'] for doc in results]) if results else ""
+    
+    if not context:
+        return "No relevant context found."
+    
+    prompt = f"""Use the following context to answer the question concisely.
+    Context:
+    {context}
+    
+    Question: {query}
+    
+    Answer:"""
+    
+    response = llm.invoke([prompt])
+    return response.content
+
+# Get an answer
+answer = rag_simple("What are different types of algorithms?", rag_retriever, llm)
+print(answer)
+```
+
+### Environment Setup
+
+Create a `.env` file in the project root by copying `.env.example`:
+
+```bash
+cp .env.example .env
+# Edit .env and add your Groq API key:
+# GROQ_API_KEY=your_api_key_here
+```
+
 ## ✅ What Has Been Achieved
 
 ### Completed Components
@@ -200,6 +287,18 @@ vectorstore.add_documents(chunks, embeddings)
    - Machine learning basics document
    - PDF loading infrastructure
 
+6. **✓ Retrieval Pipeline**
+   - RAGRetriever class for query-based document retrieval
+   - Vector similarity search with configurable thresholds
+   - Top-k result filtering with ranking
+   - Metadata-aware result handling
+
+7. **✓ LLM Integration**
+   - Groq LLM integration via ChatGroq
+   - RAG function combining retrieval and generation
+   - Configurable model parameters (temperature, max_tokens)
+   - Environment variable-based secure API key management
+
 ### Development Artifacts
 
 - **pdf-loader.ipynb**: Complete RAG pipeline implementation
@@ -207,6 +306,9 @@ vectorstore.add_documents(chunks, embeddings)
   - Document chunking demonstration
   - Embedding generation
   - Vector store integration
+  - RAG retriever implementation
+  - Groq LLM integration
+  - End-to-end question-answering pipeline
   
 - **document.ipynb**: Document loading tutorials
   - Document structure demonstration
@@ -215,10 +317,13 @@ vectorstore.add_documents(chunks, embeddings)
 
 ## 🔮 Next Steps & Enhancement Opportunities
 
-1. **Retrieval Interface** - Implement similarity search and query functionality
-2. **RAG Integration** - Connect to LLMs for question-answering
-3. **Advanced Retrieval** - Implement hybrid search (dense + sparse)
-4. **Metadata Filtering** - Add document-level filtering capabilities
+1. **Advanced Retrieval** - Implement hybrid search (dense + sparse)
+2. **Metadata Filtering** - Add document-level filtering capabilities
+3. **Query Optimization** - Implement query rewriting and multi-hop retrieval
+4. **Response Caching** - Cache frequently asked questions
+5. **Model Alternatives** - Support multiple embedding and LLM models
+6. **Web Interface** - Build a user-friendly UI for querying
+7. **Production Deployment** - Containerize with Docker and deploy to cloud
 5. **Performance Optimization** - Implement caching and batch processing
 6. **Testing Suite** - Unit tests for each component
 7. **Deployment** - API endpoints for document ingestion and querying
