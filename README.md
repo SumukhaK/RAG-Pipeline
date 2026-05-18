@@ -13,6 +13,8 @@ This RAG pipeline implements a complete document processing workflow:
 
 The system is designed to support downstream AI applications like chatbots, semantic search, and question-answering systems that leverage document retrieval.
 
+- Use `.env.example` to create a local `.env` file for API keys and secrets. The `.env` file is ignored by git.
+
 ## 🎯 Key Features
 
 - **Multi-Format Document Support**: Load documents from PDF files and plain text files
@@ -93,31 +95,30 @@ d:\RAG-Ai\Try/
         └── [collection directories] # Embedded collections
 ```
 
-## 🚀 Getting Started
+## Pipeline Flow
 
-### Prerequisites
-- Python 3.14+
-- pip or poetry for package management
+This project contains two primary pipelines: ingestion and retrieval. The ingestion pipeline converts source documents into embeddings and stores them in a vector database. The retrieval pipeline converts a user query into an embedding and finds the most relevant document chunks.
 
-### Installation
+```mermaid
+flowchart LR
+    subgraph Ingesting
+        A[Source Documents] --> B[Load PDFs / Text Files]
+        B --> C[Split into Chunks]
+        C --> D[Generate Embeddings]
+        D --> E[Persist in Vector DB]
+    end
 
-1. **Clone/Navigate to the project directory**:
-```bash
-cd d:\RAG-Ai\Try
+    subgraph Retrieval
+        F[User Query] --> G[Encode Query]
+        G --> H[Search Vector DB]
+        H --> I[Retrieve Top Chunks]
+        I --> J[Answer / LLM Response]
+    end
+
+    E --> H
 ```
 
-2. **Create and activate a virtual environment**:
-```bash
-python -m venv .venv
-.venv\Scripts\activate  # On Windows
-# or: source .venv/bin/activate  # On macOS/Linux
-```
-
-3. **Install dependencies**:
-```bash
-pip install -r requirements.txt
-# or: pip install -e .  # For development with pyproject.toml
-```
+The diagram above shows how documents enter the pipeline, get converted into vectors, and how retrieval uses those stored vectors to answer questions.
 
 ## 📖 Usage Workflow
 
