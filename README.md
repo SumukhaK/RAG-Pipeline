@@ -30,8 +30,8 @@ The system is designed to support downstream AI applications like chatbots, sema
 
 #### 1. **Document Loaders**
 - `PyPDFLoader` & `PyMuPDFLoader`: Extract text from PDF documents
-- `DirectoryLoader`: Batch process files from directories
-- `TextLoader`: Load plain text files with encoding support
+- Custom recursive ingestion helper: `process_all_pdfs()` loads PDFs from a directory tree
+- Plain text loading can be added with standard LangChain text loaders if needed
 
 #### 2. **Text Splitter**
 - `RecursiveCharacterTextSplitter`: Intelligently chunks documents
@@ -70,6 +70,7 @@ class RAGRetriever:
 - Supports various models (llama-3.1-8b-instant, etc.)
 - Configurable temperature and max tokens
 - Environment variable-based API key management
+- Includes advanced pipeline helpers for citations, streaming, history, and summarization
 
 ## 📦 Dependencies
 
@@ -148,15 +149,20 @@ The diagram above shows how documents enter the pipeline, get converted into vec
 
 ### Step 1: Load Documents
 ```python
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
+from pathlib import Path
 
-# Load all PDFs from a directory
-loader = DirectoryLoader(
-    "../data/pdf_files",
-    glob="**/*.pdf",
-    loader_cls=PyMuPDFLoader
-)
-documents = loader.load()
+# Example recursive loader helper for PDFs
+def process_all_pdfs(pdf_directory):
+    pdf_dir = Path(pdf_directory)
+    all_documents = []
+    for pdf_file in pdf_dir.glob("**/*.pdf"):
+        loader = PyPDFLoader(str(pdf_file))
+        documents = loader.load()
+        all_documents.extend(documents)
+    return all_documents
+
+documents = process_all_pdfs("../data/pdf_files")
 ```
 
 ### Step 2: Split Documents into Chunks
@@ -211,6 +217,9 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()  # Load API key from .env
+# If your notebook runs from a different working directory, pass the explicit .env path:
+# load_dotenv("/path/to/project/.env")
+
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 llm = ChatGroq(
@@ -229,12 +238,12 @@ def rag_simple(query, retriever, llm, top_k=3):
         return "No relevant context found."
     
     prompt = f"""Use the following context to answer the question concisely.
-    Context:
-    {context}
-    
-    Question: {query}
-    
-    Answer:"""
+Context:
+{context}
+
+Question: {query}
+
+Answer:"""
     
     response = llm.invoke([prompt])
     return response.content
@@ -244,14 +253,32 @@ answer = rag_simple("What are different types of algorithms?", rag_retriever, ll
 print(answer)
 ```
 
-### Environment Setup
+### Advanced RAG Pipeline Helpers
+```python
+# Advanced retrieval helper with sources, confidence, and optional returned context
+result = rag_advanced(
+    "Different types of data structures",
+    rag_retriever,
+    llm,
+    top_k=3,
+    min_score=0.1,
+    return_context=True
+)
+print(result['answer'])
+print(result['confidence'])
+print(result['sources'])
 
-Create a `.env` file in the project root by copying `.env.example`:
-
-```bash
-cp .env.example .env
-# Edit .env and add your Groq API key:
-# GROQ_API_KEY=your_api_key_here
+# Higher-level orchestrator with history, summarization, and citations
+adv_rag = AdvancedRAGPipeline(rag_retriever, llm)
+result = adv_rag.query(
+    "Explain machine learning algorithms",
+    top_k=3,
+    min_score=0.1,
+    stream=True,
+    summarize=True
+)
+print(result['answer'])
+print(result['summary'])
 ```
 
 ## ✅ What Has Been Achieved
@@ -293,7 +320,12 @@ cp .env.example .env
    - Top-k result filtering with ranking
    - Metadata-aware result handling
 
-7. **✓ LLM Integration**
+7. **✓ Advanced RAG Orchestration**
+   - `rag_advanced()` helper for source citations, confidence scoring, and optional context returns
+   - `AdvancedRAGPipeline` class for query history, summarization, and streaming output
+   - Improved answer generation with citation-aware responses
+
+8. **✓ LLM Integration**
    - Groq LLM integration via ChatGroq
    - RAG function combining retrieval and generation
    - Configurable model parameters (temperature, max_tokens)
@@ -308,6 +340,7 @@ cp .env.example .env
   - Vector store integration
   - RAG retriever implementation
   - Groq LLM integration
+  - Advanced answer orchestration with citations, summaries, and history
   - End-to-end question-answering pipeline
   
 - **document.ipynb**: Document loading tutorials
@@ -330,6 +363,13 @@ cp .env.example .env
 8. **Monitoring** - Logging and metrics for production use
 
 ## 🛠️ Configuration
+The notebook includes an advanced answer orchestration layer via `rag_advanced()` and `AdvancedRAGPipeline`, which add:
+- source citations
+- confidence scoring
+- query history tracking
+- optional streaming output
+- summary generation
+
 
 ### Model Selection
 Change the embedding model in `EmbeddingManager`:
