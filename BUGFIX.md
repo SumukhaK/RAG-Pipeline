@@ -52,21 +52,49 @@ notebook and README already used `os.getenv("GROQ_API_KEY")` correctly.
 **Fix:** read the key via `os.getenv("GROQ_API_KEY")` and raise a clear `ValueError` if it's
 unset, instead of silently continuing with an empty credential.
 
+## 4. print()-based logging in `data_loader.py`, `embeddings.py`, `vectorstore.py`
+
+**Commit:** `c4d171e`
+
+All three modules logged exclusively via `print()` calls with manually-typed `[DEBUG]`,
+`[INFO]`, and `[ERROR]` string tags. Root cause: there was never an actual logging setup, just
+ad hoc string prefixes emulating log levels. That means no way to control verbosity, no
+timestamps, no indication of which module emitted a given line, and no way to redirect or
+filter output.
+
+**Fix:** added `src/logging_config.py`, a thin wrapper around the stdlib `logging` module
+exposing `get_logger(name)`. It configures the root logger exactly once (format:
+`timestamp [LEVEL] logger_name: message`), with the level controlled by an optional
+`LOG_LEVEL` environment variable (defaults to `INFO`). `data_loader.py`, `embeddings.py`, and
+`vectorstore.py` each get a module-level logger via `get_logger(__name__)` and call
+`logger.debug` / `logger.info` / `logger.error` instead of `print()`, dropping the
+now-redundant bracket tags since the formatter supplies the level.
+
+The `if __name__ == "__main__":` demo blocks in these files were deliberately left untouched —
+that's direct CLI output for a standalone run, not application logging. `src/search.py`'s two
+`print()` calls were also left untouched; they weren't part of the reported issue and are noted
+below as still open.
+
 ## Verification
 
-- All three fixes were verified by running the actual code (not just reading it), using a real
+- All four fixes were verified by running the actual code (not just reading it), using a real
   `GROQ_API_KEY` in a local, gitignored `.env` file (never committed — confirmed with
   `git check-ignore` and `git status` after each change).
 - `src/data_loader.py`, `src/embeddings.py`, `src/vectorstore.py`, and `src/search.py` were
   import-checked together after fix #1 and #2.
 - `RAGSearch().search_and_summarize(...)` was run end-to-end against the existing persisted
   FAISS store after fix #3, making a live Groq API call and returning a real answer.
+- After fix #4, the full ingestion path (`load_all_documents` → `EmbeddingPipeline` →
+  `FaissVectorStore.build_from_documents`, 874 documents → 901 chunks) was run against a
+  throwaway persist directory (not the committed `faiss_store/`) and produced identical
+  results with properly formatted, leveled log output. `RAGSearch().search_and_summarize(...)`
+  was re-run against the real persisted store and again returned a correct, live Groq answer.
 - `git status` was checked after every change to confirm only the intended file(s) were
   modified — no regenerated vector store or other side effects.
 
 ## Still open (not part of this branch)
 
-From the same review, two further issues were identified but are out of scope for this branch:
+From the same review, issues identified but intentionally out of scope for this branch:
 
 - `FaissVectorStore.build_from_documents()` stores only `{"text": chunk.page_content}` as
   metadata, discarding the source file and page number that the document loaders attach —
@@ -74,3 +102,6 @@ From the same review, two further issues were identified but are out of scope fo
 - Two disconnected vector stores exist in the repo (a ChromaDB store under `data/vector_store/`
   from the notebook, and the FAISS store under `faiss_store/` used by `src/`) with no single
   ingestion pipeline producing both.
+- `src/search.py` still logs via two `print()` calls rather than the new `logging_config`
+  module; not part of the originally reported issue (which named only `data_loader.py`,
+  `embeddings.py`, and `vectorstore.py`).
